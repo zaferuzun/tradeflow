@@ -135,6 +135,26 @@ curl http://localhost:8080/test/benchmark/virtual?tasks=1000
 #Virtual Threads ile 1000 işlem süresi: 1011 ms (Average of 10 results: 1015)
 ```
 
+## 🚀 Resilient Parallel Processing (High Throughput)
+
+TradeFlow, birden fazla varlık verisini toplarken **"Biri hata verirse hepsi durmasın"** (Partial Failure Management) prensibiyle çalışır.
+
+### Teknik Mimari:
+1. **Virtual Thread Per Task:** Her bir sembol sorgusu için  Sanal bir Thread başlatılır. Bu, I/O bloklamalarını (API yanıt sürelerini) sistem kaynaklarını tüketmeden paralel olarak yönetmemizi sağlar.
+2. **Exception-to-Data Pattern:** `CompletableFuture.handle()` kullanılarak istisnalar (Exceptions), tip güvenli `ErrorAsset` nesnelerine dönüştürülür. Bu sayede hata durumları "beklenmedik bir çöküş" değil, "işlenebilir bir veri" haline gelir.
+3. **Exhaustive Switch Handling:** Java 21'in `sealed interface` yapısı sayesinde, rapor oluşturulurken tüm varlık tipleri (Crypto, Stock, Fiat ve Hata) derleme zamanı güvenliğiyle işlenir.
+
+### Bulk Sorgu Örneği:
+`GET /api/market/bulk?symbols=BTCUSDT,INVALID_COIN,ETHUSDT`
+
+**Yanıt Stratejisi:**
+- ✅ **BTCUSDT:** Başarılı fiyat bilgisi.
+- ⚠️ **INVALID_COIN:** `ErrorAsset` içinde hata detayı ("Varlık bulunamadı").
+- ✅ **ETHUSDT:** Başarılı fiyat bilgisi.
+- 📊 **Total Value:** Sadece başarılı olanların toplamı. 
+
+
+
 NOT: StructuredTaskScope java 21 de preview aşamasında daha sonra bakılacak. 
 
 Standardizasyon: ProblemDetail kullanarak Google, Microsoft gibi devlerin kullandığı hata formatına uymuş oldun.
