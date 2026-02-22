@@ -98,4 +98,46 @@ TradeFlow, dış servislerle (Binance, Exchange API vb.) konuşurken **Spring Re
 
 ---
 
+## ⚡ Performance Showdown: Virtual vs. Platform Threads
 
+TradeFlow, Java 21'in Sanal Thread (Project Loom) teknolojisinin geleneksel Platform Thread'lerine karşı üstünlüğünü kanıtlayan yerleşik bir benchmark mekanizmasına sahiptir.
+
+### 🧪 Test Senaryosu
+Aşağıdaki test, her biri **1 saniye (1000ms)** süren (bloklayan I/O simülasyonu) **1.000 adet** bağımsız görevin eşzamanlı olarak çalıştırılmasını kapsar.
+
+- **Platform Threads:** 100 adet sabit thread havuzu (Fixed Thread Pool) kullanır.
+- **Virtual Threads:** Her görev için yeni bir Sanal Thread oluşturur (`newVirtualThreadPerTaskExecutor`).
+
+### 📊 Benchmark Sonuçları
+
+| Thread Tipi | Görev Sayısı | Havuz Boyutu | Toplam Süre | Verimlilik |
+| :--- | :---: | :---: | :---: | :--- |
+| **Platform Threads** | 1,000 | 100 (Fixed) | **~10,000 ms** | Darboğaza takılır (10 turda tamamlar). |
+| **Virtual Threads** | 1,000 | Sınırsız (Sanal) | **~1,000 ms** | %100 Paralel (Tek turda tamamlar). |
+
+> **Not:** Görev sayısını 10.000'e çıkardığınızda, Platform Thread'lerin süresi doğrusal olarak artarken (100 saniye), Virtual Thread'ler hala ~1 saniye civarında sonuç vermektedir.
+
+### 🔍 Teknik Analiz (Senior Insight)
+- **Blocking Cost:** Platform thread'lerde her "bekleme" (wait/sleep), bir OS thread'ini kilitler ve sistem kaynaklarını (1MB stack) esir alır.
+- **Mount/Unmount:** Virtual thread'ler bir I/O beklemeye başladığında, JVM onları taşıyıcı thread'den (Carrier Thread) ayırır. Bu sayede fiziksel kaynaklar boşa çıkar ve diğer görevler için kullanılabilir.
+- **Throughput:** Virtual Threads kullanımı, uygulamanın donanım maliyetini değiştirmeden işlem kapasitesini (throughput) 10 katına kadar artırabilir.
+
+### 🚀 Testi Çalıştırın
+Uygulamayı başlattıktan sonra aşağıdaki uç noktaları kullanarak farkı kendi gözlerinizle görebilirsiniz:
+
+```bash
+# Platform Threads Testi
+curl http://localhost:8080/test/benchmark/platform?tasks=1000
+#Platform Threads (Pool Size 100) ile 1000 işlem süresi: 10101 ms
+
+# Virtual Threads Testi (Java 21 Power!)
+curl http://localhost:8080/test/benchmark/virtual?tasks=1000
+#Virtual Threads ile 1000 işlem süresi: 1011 ms (Average of 10 results: 1015)
+```
+
+NOT: StructuredTaskScope java 21 de preview aşamasında daha sonra bakılacak. 
+
+Standardizasyon: ProblemDetail kullanarak Google, Microsoft gibi devlerin kullandığı hata formatına uymuş oldun.
+Temiz Kod: Controller içinde try-catch kalabalığı bitti. Hatalar fırlatılır (throw), merkezi bir yer onları yakalar.
+Gözlemlenebilirlik: Hata mesajlarına timestamp ve type (hata döküman linki) ekleyerek debug sürecini kolaylaştırdın.
+Virtual Thread Dostu: Bu hata yapısı asenkron ve sanal thread akışlarında bile thread-safe çalışır.
