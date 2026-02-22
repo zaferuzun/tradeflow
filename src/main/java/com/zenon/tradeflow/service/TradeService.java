@@ -6,6 +6,7 @@ import com.zenon.tradeflow.exception.TradeException;
 import com.zenon.tradeflow.model.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
@@ -23,7 +24,9 @@ public class TradeService {
 
     private final RestClient binanceClient;
 
+    @Cacheable(value = "market-prices", key = "#symbol", sync = true)
     public Asset getCryptoPrice(String symbol) {
+        log.info("🔥 Binance API çağrılıyor: {}", symbol);
         // RestClient ile modern veri çekme
         var response = binanceClient.get()
                 .uri("/ticker/price?symbol=" + symbol)
