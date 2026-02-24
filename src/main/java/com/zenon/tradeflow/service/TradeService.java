@@ -7,6 +7,8 @@ import com.zenon.tradeflow.model.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
@@ -24,10 +26,12 @@ public class TradeService {
 
     private final RestClient binanceClient;
 
+    private final ApplicationContext context; // Spring context'ini alıyoruz
+
+
     @Cacheable(value = "market-prices", key = "#symbol", sync = true)
     public Asset getCryptoPrice(String symbol) {
-        log.info("🔥 Binance API çağrılıyor: {}", symbol);
-        // RestClient ile modern veri çekme
+        log.info("🔥 Binance API çağrılıyor: {}", symbol);     // RestClient ile modern veri çekme
         var response = binanceClient.get()
                 .uri("/ticker/price?symbol=" + symbol)
                 .retrieve()
@@ -56,12 +60,14 @@ public class TradeService {
     }
 
     public TradeReport getBulkPrices(List<String> symbols) {
+        // Kendi Proxy'mizi context üzerinden çekiyoruz
+        TradeService self = context.getBean(TradeService.class);
         // Sanal Thread Executor'ı oluşturuyoruz
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
 
             // Her sembol için asenkron bir görev (task) başlatıyoruz
             List<CompletableFuture<Asset>> futures = symbols.stream()
-                    .map(symbol -> CompletableFuture.supplyAsync(() -> getCryptoPrice(symbol), executor)
+                    .map(symbol -> CompletableFuture.supplyAsync(() -> self.getCryptoPrice(symbol), executor)
                             // Kritik Yer: Hata oluşursa bunu yakalayıp ErrorAsset'e çeviriyoruz
                             .handle((asset, ex) -> {
                                 if (ex != null) {

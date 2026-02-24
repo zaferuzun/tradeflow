@@ -155,6 +155,58 @@ TradeFlow, birden fazla varlık verisini toplarken **"Biri hata verirse hepsi du
 
 
 
+Bu ek geliştirme (Sınıfların ayrılması veya Proxy kullanımı), Spring Framework’ün çalışma mantığındaki en kritik konulardan biri olan **"Self-Invocation" (Kendi Kendini Çağırma)** problemini çözmek içindir. Senior bir geliştirici, anotasyonların sihirli bir değnek olmadığını, arkada bir **AOP Proxy** mekanizması olduğunu bilir.
+
+İşte `README.md` dosyana ekleyebileceğin, teknik derinliği yüksek bir açıklama metni:
+
+---
+
+### 📝 README.md'ye Eklenecek Bölüm
+
+
+## 🏗️ Mimari Refactoring: Spring AOP Proxy & Self-Invocation Çözümü
+
+Projenin geliştirme sürecinde, tekli varlık sorgulamalarında çalışan önbellek (Cache) mekanizmasının, toplu sorgulamalarda (Bulk Requests) devre dışı kaldığı tespit edilmiştir. Bu durum, Spring Framework'ün **AOP (Aspect Oriented Programming)** tabanlı Proxy mimarisinden kaynaklanmaktadır.
+
+### 🔍 Problem: Self-Invocation Nedir?
+Spring'de `@Cacheable`, `@Transactional` veya `@Async` gibi anotasyonlar, ilgili sınıfın bir **Vekil (Proxy)** nesnesi üzerinden çağrılmasıyla aktif olur. 
+- **Normal Akış:** `Controller` -> `Service (Proxy)` -> `Cache Check` -> `Actual Service Method`.
+- **Hatalı Akış (Self-Invocation):** Sınıf içindeki bir metodun (`getBulkPrices`), aynı sınıf içindeki başka bir metodu (`getCryptoPrice`) doğrudan çağırması durumunda, çağrı Proxy üzerinden geçmez. Bu nedenle Java doğrudan hedef metoda gider ve `@Cacheable` anotasyonu (ve önbellek kontrolü) tamamen baypas edilir.
+
+### 🛠️ Çözüm: Sorumlulukların Ayrılması (Separation of Concerns)
+Bu sorunu aşmak ve **Virtual Threads** ile yapılan paralel sorguların her birinin önbellekten faydalanmasını sağlamak için mimari bir iyileştirme yapılmıştır:
+
+
+### 🛠️ Uygulanan Çözüm: Dynamic Proxy Resolution via ApplicationContext
+
+Self-invocation sorununu aşmak ve döngüsel bağımlılık (circular dependency) risklerini sıfıra indirmek için **Dynamic Proxy Resolution** yöntemi tercih edilmiştir:
+
+- **Runtime Bean Retrieval:** `MarketService` nesnesi, `ApplicationContext` aracılığıyla çalışma zamanında kendi Proxy referansını elde eder.
+- **Breaking the Cycle:** Bu yöntem, `@Lazy` enjeksiyonun aksine Spring'in katı döngüsel bağımlılık kontrollerine takılmadan, metod çağrılarının her zaman AOP Proxy üzerinden geçmesini garanti eder.
+- **Thread Safety:** Virtual Threads (Sanal Thread'ler) altında yapılan paralel çağrılar, bu dinamik referans üzerinden güvenli bir şekilde `@Cacheable` mekanizmasına yönlendirilir.
+
+//Yapılabilirdi.
+1. **PriceProvider Sınıfı:** Sadece dış API (Binance) ile konuşan ve `@Cacheable` notasyonu ile önbellek yönetiminden sorumlu olan izole bir katman oluşturuldu.
+2. **MarketService Sınıfı:** İş mantığını ve Sanal Thread (Virtual Threads) yönetimini üstlenen koordinatör katman olarak kurgulandı.
+
+Bu sayede `MarketService`, `PriceProvider` nesnesini çağırdığında Spring'in Proxy mekanizması araya girer ve:
+- ✅ **Performans:** Aynı varlık için mükerrer API çağrıları önlenir.
+- ✅ **Resilience:** Dış servis (Binance) üzerindeki trafik yükü ve "Rate Limit" riskleri azaltılır.
+- ✅ **Clean Code:** İş mantığı (Concurrency) ile veri sağlama (Caching) sorumlulukları birbirinden ayrılmıştır.
+
+### 🚀 Teknik Kazanım
+Sanal thread'ler (Virtual Threads) I/O bloklamalarını çözerek eşzamanlılığı artırırken, bu mimari refactoring ile gereksiz I/O operasyonları da önbellek seviyesinde durdurulmuştur. Sonuç olarak; **yüksek eşzamanlılık + düşük gecikme (latency)** hedefine tam uyum sağlanmıştır.
+
+
+
+
+**GitHub commiti için öneri:**
+`docs: explain architectural refactoring for spring aop proxy and self-invocation issue`
+
+Bu dökümantasyonla birlikte 1. hafta serüvenini **"Teknik Mimar"** seviyesinde tamamlamış oluyoruz. Sırada ne var? Başka bir özelliğe mi geçelim yoksa 2. haftanın yeni konusuna (Docker/Containerization) merhaba mı diyelim?
+
+
+
 NOT: StructuredTaskScope java 21 de preview aşamasında daha sonra bakılacak. 
 
 Standardizasyon: ProblemDetail kullanarak Google, Microsoft gibi devlerin kullandığı hata formatına uymuş oldun.
