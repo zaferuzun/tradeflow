@@ -18,7 +18,7 @@ public class CacheContentEndpoint {
 
     private final CacheManager cacheManager;
 
-    @ReadOperation // GET isteği atıldığında çalışır
+    @ReadOperation
     public Map<String, Object> getAllCacheContents() {
         // Tüm cache isimlerini dönüp içeriklerini bir map'te topluyoruz
         Map<String, Object> allContents = new java.util.HashMap<>();

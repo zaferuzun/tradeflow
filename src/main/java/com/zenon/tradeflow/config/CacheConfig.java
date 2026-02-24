@@ -17,7 +17,7 @@ public class CacheConfig {
     public CacheManager cacheManager() {
         CaffeineCacheManager cacheManager = new CaffeineCacheManager("market-prices");
         cacheManager.setCaffeine(Caffeine.newBuilder()
-                .expireAfterWrite(60, TimeUnit.SECONDS) // Fiyatlar 60 saniye taze kalsın
+                .expireAfterWrite(60, TimeUnit.SECONDS) // Fiyatlar 60 saniye de bir yenilensin
                 .maximumSize(1000) // Maksimum 1000 farklı sembol sakla
                 .recordStats()); // Performans metriklerini takip etmemizi sağlar
         return cacheManager;
